@@ -3,15 +3,18 @@ from datetime import datetime, date
 from PySide6.QtWidgets import QMainWindow, QVBoxLayout, QComboBox, QWidget, QPushButton, QMessageBox, QSizePolicy, \
     QLabel, QLineEdit, QTableWidget, QAbstractItemView, QTableWidgetItem, QTextEdit, QHeaderView
 
-from Model.Nota import Nota
-from Controller.Nota_Dao import DataBase
+
+from Infra.configs.connection import DBConnectionHandler
+from Infra.entities.nota import Nota
+from Infra.repository.nota_repository import NotaRepository
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
+        conn = DBConnectionHandler()
         self.setMinimumSize(500, 700)
-
         self.setWindowTitle('Bloco de Notas')
 
         self.lbl_id = QLabel('ID')
@@ -67,7 +70,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.container)
         self.container.setLayout(layout)
 
-        # self.consulta_bloco_notas()
+        ##self.consulta_bloco_notas()
         self.bloco_de_notas.cellDoubleClicked.connect(self.carregar_notas)
 
         self.btn_remover.setVisible(True)
@@ -90,8 +93,8 @@ class MainWindow(QMainWindow):
         resposta = msg.exec()
 
         if resposta == QMessageBox.Yes:
-            db = DataBase()
-            retorno = db.deletar_nota(self.txt_id.text())
+            db = NotaRepository()
+            retorno = db.delete(self.txt_id.text())
 
             if retorno == 'ok':
                 new_msg = QMessageBox()
@@ -110,17 +113,17 @@ class MainWindow(QMainWindow):
         self.popula_bloco_de_notas()
 
     def salvar_nota(self):
-        db = DataBase()
+        db = NotaRepository()
 
-        id = self.txt_id.text()
+        # id = self.txt_id.text()
         titulo_nota = self.txt_titulo_nota.text()
         data = date.today()
         texto = str(self.txt_texto.toPlainText())
 
-        nota = Nota(id, titulo_nota, texto, data)
+        nota = Nota( titulo_nota=titulo_nota, texto=texto, data=data)
 
         if self.btn_salvar.text() == 'Salvar':
-            retorno = db.salvar_nota(nota)
+            retorno = db.insert(nota)
 
             if retorno == 'ok':
                 msg = QMessageBox()
@@ -137,20 +140,15 @@ class MainWindow(QMainWindow):
 
         elif self.btn_salvar.text() == 'Atualizar':
 
-            retorno = db.atualizar_nota(nota)
-            if retorno == 'ok':
-                msg = QMessageBox()
-                msg.setIcon(QMessageBox.Information)
-                msg.setWindowTitle('Atualizações')
-                msg.setText('Nota Atualizada com Sucesso!')
-                msg.exec()
-                self.limpar_campos()
-            else:
-                msg = QMessageBox()
-                msg.setIcon(QMessageBox.Critical)
-                msg.setWindowTitle('Erro ao Atualizar!')
-                msg.setText('Erro ao Atualizar, verifique os dados!')
-                msg.exec()
+            nota.id = id = int(self.txt_id.text())
+            db.update(nota)
+
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setWindowTitle('Atualizações')
+            msg.setText('Nota Atualizada com Sucesso!')
+            msg.exec()
+            self.limpar_campos()
 
         self.popula_bloco_de_notas()
         self.txt_id.setReadOnly(True)
@@ -173,13 +171,18 @@ class MainWindow(QMainWindow):
 
     def popula_bloco_de_notas(self):
         self.bloco_de_notas.setRowCount(0)
-        db = DataBase()
-        lista_notas = db.consultar_bloco()
+        conn = NotaRepository()
+        lista_notas = conn.select_all()
         self.bloco_de_notas.setRowCount(len(lista_notas))
 
-        for linha, nota in enumerate(lista_notas):
-            for coluna, valor in enumerate(nota):
-                self.bloco_de_notas.setItem(linha, coluna, QTableWidgetItem(str(valor)))
+        linha = 0
+        for nota in lista_notas:
+            valores = [nota.id, nota.titulo_nota, nota.texto, nota.data]
+            for valor in valores:
+                item = QTableWidgetItem(str(valor))
+                self.bloco_de_notas.setItem(linha, valores.index(valor), item)
+                self.bloco_de_notas.item(linha, valores.index(valor))
+            linha += 1
 
     def carregar_notas(self, row, column):
         self.txt_id.setText(self.bloco_de_notas.item(row, 0).text())
